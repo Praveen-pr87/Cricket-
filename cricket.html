@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Cricket Matches</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            font-family: 'Arial', sans-serif;
+            min-height: 100vh;
+            perspective: 1000px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #fff;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            animation: fadeIn 1s ease-out;
+        }
+
+        #searchInput {
+            width: 100%;
+            padding: 15px;
+            margin: 20px 0;
+            border: none;
+            border-radius: 25px;
+            font-size: 16px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            transition: transform 0.3s ease;
+        }
+
+        #searchInput:focus {
+            transform: scale(1.02);
+            outline: none;
+        }
+
+        .match-card {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 15px;
+            padding: 20px;
+            margin: 15px 0;
+            cursor: pointer;
+            transform-style: preserve-3d;
+            transition: all 0.5s ease;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+            position: relative;
+        }
+
+        .match-card:hover {
+            transform: translateY(-10px) rotateX(5deg);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.3);
+        }
+
+        .match-card.selected {
+            background: linear-gradient(135deg, #00b4db, #0083b0);
+            color: white;
+        }
+
+        .pin-button {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: #666;
+            transition: transform 0.3s ease;
+            z-index: 1;
+        }
+
+        .pin-button.pinned {
+            color: #f1c40f;
+            transform: rotate(-45deg);
+        }
+
+        .pinned-section {
+            border-bottom: 2px dashed rgba(255,255,255,0.3);
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+        }
+
+        .match-name {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #333;
+            padding-right: 30px;
+        }
+
+        .selected .match-name {
+            color: white;
+        }
+
+        .match-details {
+            color: #666;
+            font-size: 16px;
+            line-height: 1.5;
+        }
+
+        .selected .match-details {
+            color: #fff;
+        }
+
+        .score-info {
+            margin-top: 15px;
+            font-weight: bold;
+            font-size: 18px;
+            color: #2196f3;
+        }
+
+        .selected .score-info {
+            color: #fff;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            z-index: 1000;
+            perspective: 1000px;
+        }
+
+        .modal-content {
+            position: relative;
+            background: white;
+            width: 80%;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 30px;
+            border-radius: 20px;
+            transform-origin: center;
+            animation: modalOpen 0.5s ease-out;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 24px;
+            cursor: pointer;
+            color: #333;
+            transition: transform 0.3s ease;
+        }
+
+        .close-btn:hover {
+            transform: rotate(90deg);
+        }
+
+        .detailed-score {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 15px;
+            margin-top: 20px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: white;
+        }
+
+        .loading:after {
+            content: '';
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            border: 3px solid #fff;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes modalOpen {
+            from {
+                transform: rotateX(-70deg) translateY(-50%);
+                opacity: 0;
+            }
+            to {
+                transform: rotateX(0) translateY(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Live Cricket Matches</h1>
+        <input type="text" id="searchInput" placeholder="Search matches...">
+        <div id="matchesContainer"></div>
+    </div>
+
+    <div id="matchModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn">&times;</span>
+            <div id="modalContent"></div>
+        </div>
+    </div>
+
+      <script>
+        $(document).ready(function() {
+            const PRIMARY_KEY = 'ebd02c96-6244-4bc2-aee1-2051bcbacd7e';
+            const BACKUP_KEY = '51076650-e9e4-4e43-8887-56d0b4c80760';
+            let selectedMatchId = null;
+            let refreshInterval;
+            let currentApiKey = PRIMARY_KEY;
+
+            function tryFetchWithKey(apiKey) {
+                return new Promise((resolve, reject) => {
+                    $.ajax({
+                        url: `https://api.cricapi.com/v1/currentMatches?apikey=${apiKey}&offset=0`,
+                        method: 'GET',
+                        success: function(response) {
+                            if (response.data && response.data.length > 0) {
+                                resolve(response.data);
+                            } else {
+                                reject('No data or empty response');
+                            }
+                        },
+                        error: function(error) {
+                            reject(error);
+                        }
+                    });
+                });
+            }
+
+            function fetchMatches() {
+                $('#matchesContainer').html('<div class="loading"></div>');
+                
+                tryFetchWithKey(currentApiKey)
+                    .then(data => {
+                        displayMatches(data);
+                    })
+                    .catch(() => {
+                        // Switch to backup key if primary fails
+                        currentApiKey = currentApiKey === PRIMARY_KEY ? BACKUP_KEY : PRIMARY_KEY;
+                        console.log('Switching to alternate API key');
+                        
+                        return tryFetchWithKey(currentApiKey)
+                            .then(data => {
+                                displayMatches(data);
+                            })
+                            .catch(error => {
+                                console.error('Both API keys failed:', error);
+                                $('#matchesContainer').html('<div style="color: white; text-align: center;">Error loading matches</div>');
+                            });
+                    });
+            }
+
+            function displayMatches(matches) {
+                const container = $('#matchesContainer');
+                container.empty();
+
+                const pinnedSection = $('<div>').addClass('pinned-section');
+                const unpinnedSection = $('<div>');
+
+                matches.forEach((match, index) => {
+                    const isPinned = localStorage.getItem(`pinned_${match.id}`) === 'true';
+                    
+                    const matchCard = $('<div>')
+                        .addClass('match-card')
+                        .attr('data-id', match.id)
+                        .css('animation-delay', `${index * 0.1}s`)
+                        .html(`
+                            <button class="pin-button ${isPinned ? 'pinned' : ''}" title="Pin this match">📌</button>
+                            <div class="match-name">${match.name}</div>
+                            <div class="match-details">
+                                <div>Status: ${match.status}</div>
+                                <div>Venue: ${match.venue}</div>
+                                ${getScoreHTML(match.score)}
+                            </div>
+                        `);
+
+                    if (match.id === selectedMatchId) {
+                        matchCard.addClass('selected');
+                    }
+
+                    if (isPinned) {
+                        pinnedSection.append(matchCard);
+                    } else {
+                        unpinnedSection.append(matchCard);
+                    }
+                });
+
+                if (pinnedSection.children().length > 0) {
+                    container.append(pinnedSection);
+                }
+                container.append(unpinnedSection);
+            }
+
+            function getScoreHTML(score) {
+                if (!score) return '';
+                
+                let scoreHTML = '<div class="score-info">';
+                if (score[0]) {
+                    scoreHTML += `<div>${score[0].inning}: ${score[0].r}/${score[0].w}</div>`;
+                }
+                if (score[1]) {
+                    scoreHTML += `<div>${score[1].inning}: ${score[1].r}/${score[1].w}</div>`;
+                }
+                scoreHTML += '</div>';
+                return scoreHTML;
+            }
+
+            function showMatchDetails(match) {
+                const modalContent = $('#modalContent');
+                modalContent.html(`
+                    <h2>${match.name}</h2>
+                    <div class="detailed-score">
+                        <h3>Match Details</h3>
+                        <p>Status: ${match.status}</p>
+                        <p>Venue: ${match.venue}</p>
+                        <p>Date: ${match.date}</p>
+                        ${getDetailedScoreHTML(match.score)}
+                    </div>
+                `);
+                $('#matchModal').fadeIn(300);
+            }
+
+            function getDetailedScoreHTML(score) {
+                if (!score) return '';
+                
+                let html = '<div class="detailed-score-info">';
+                if (score[0]) {
+                    html += `
+                        <h4>${score[0].inning}</h4>
+                        <p>Runs: ${score[0].r}</p>
+                        <p>Wickets: ${score[0].w}</p>
+                        <p>Overs: ${score[0].o}</p>
+                    `;
+                }
+                if (score[1]) {
+                    html += `
+                        <h4>${score[1].inning}</h4>
+                        <p>Runs: ${score[1].r}</p>
+                        <p>Wickets: ${score[1].w}</p>
+                        <p>Overs: ${score[1].o}</p>
+                    `;
+                }
+                html += '</div>';
+                return html;
+            }
+
+            $('#searchInput').on('input', function() {
+                const searchTerm = $(this).val().toLowerCase();
+                $('.match-card').each(function() {
+                    const matchText = $(this).text().toLowerCase();
+                    $(this).toggle(matchText.includes(searchTerm));
+                });
+            });
+
+            $(document).on('click', '.match-card', function(e) {
+                if (!$(e.target).hasClass('pin-button')) {
+                    const matchId = $(this).data('id');
+                    selectedMatchId = matchId;
+                    
+                    tryFetchWithKey(currentApiKey)
+                        .then(data => {
+                            const match = data.find(m => m.id === matchId);
+                            if (match) {
+                                showMatchDetails(match);
+                            }
+                        })
+                        .catch(() => {
+                            currentApiKey = currentApiKey === PRIMARY_KEY ? BACKUP_KEY : PRIMARY_KEY;
+                            return tryFetchWithKey(currentApiKey)
+                                .then(data => {
+                                    const match = data.find(m => m.id === matchId);
+                                    if (match) {
+                                        showMatchDetails(match);
+                                    }
+                                });
+                        });
+
+                    clearInterval(refreshInterval);
+                    refreshInterval = setInterval(() => {
+                        tryFetchWithKey(currentApiKey)
+                            .then(data => {
+                                const match = data.find(m => m.id === matchId);
+                                if (match) {
+                                    showMatchDetails(match);
+                                }
+                            })
+                            .catch(() => {
+                                currentApiKey = currentApiKey === PRIMARY_KEY ? BACKUP_KEY : PRIMARY_KEY;
+                                return tryFetchWithKey(currentApiKey);
+                            });
+                    }, 30000);
+                }
+            });
+
+            $(document).on('click', '.pin-button', function(e) {
+                e.stopPropagation();
+                const matchCard = $(this).closest('.match-card');
+                const matchId = matchCard.data('id');
+                const isPinned = $(this).hasClass('pinned');
+
+                if (isPinned) {
+                    localStorage.removeItem(`pinned_${matchId}`);
+                    $(this).removeClass('pinned');
+                } else {
+                    localStorage.setItem(`pinned_${matchId}`, 'true');
+                    $(this).addClass('pinned');
+                }
+
+                fetchMatches();
+            });
+
+            $('.close-btn').click(function() {
+                $('#matchModal').fadeOut(300);
+                clearInterval(refreshInterval);
+            });
+
+            $(window).click(function(event) {
+                if ($(event.target).is('#matchModal')) {
+                    $('#matchModal').fadeOut(300);
+                    clearInterval(refreshInterval);
+                }
+            });
+
+            // Initial fetch
+            fetchMatches();
+        });
+    </script>
+</body>
+</html>
